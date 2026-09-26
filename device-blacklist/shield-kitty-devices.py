@@ -122,7 +122,14 @@ def _data_lines(path):
 
 
 def parse_bans(path):
-    """Return {key: (vid, pid, when, attempts)}."""
+    """Return {key: (vid, pid, when, attempts)}.
+
+    Column order matches add_ban() and the header it writes:
+        vid,pid,serial,when,attempts
+    Note the return tuple deliberately OMITS serial: callers match on
+    (vid, pid) only, because a device that reports no serial must still be
+    recognised as banned.
+    """
     out = {}
     for line in _data_lines(path):
         parts = [p.strip() for p in line.split(",")]
@@ -131,7 +138,12 @@ def parse_bans(path):
         vid, pid = parts[0].lower(), parts[1].lower()
         serial = parts[2] if len(parts) > 2 else ""
         when = parts[3] if len(parts) > 3 else ""
-        count = parts[4] if len(parts) > 4 and parts[4].isdigit() else 1
+        # attempts is the FIFTH column (index 4). The old code tested
+        # parts[4].isdigit() only when len(parts) > 4, so a 4-field row left
+        # count as the literal string "1" instead of the int 1 -- and any
+        # caller doing arithmetic or comparison on it got a string.
+        raw_count = parts[4] if len(parts) > 4 else ""
+        count = int(raw_count) if raw_count.isdigit() else 1
         out["{}:{}:{}".format(vid, pid, serial)] = (vid, pid, when, count)
     return out
 
