@@ -230,12 +230,19 @@ def fire_alert(events: list[dict]) -> None:
     # Append to the tamper-evident evidence chain BEFORE displaying. If the
     # log write fails we still alert: losing evidence is bad, but staying
     # silent about an intrusion is worse.
+    #
+    # The return code IS checked. It was previously discarded, so a failed
+    # record looked identical to a successful one from the journal — a broken
+    # evidence chain would have been invisible until you needed the proof.
     if EVIDENCE.exists():
         try:
-            subprocess.run(
+            r = subprocess.run(
                 [sys.executable, str(EVIDENCE), "record", "--event", json.dumps(payload)],
-                capture_output=True, timeout=20,
+                capture_output=True, text=True, timeout=20,
             )
+            if r.returncode != 0:
+                log("EVIDENCE WRITE FAILED (rc={}): {}".format(
+                    r.returncode, (r.stderr or r.stdout).strip()[:200]))
         except Exception as exc:
             log(f"evidence logging failed: {exc}")
     else:
