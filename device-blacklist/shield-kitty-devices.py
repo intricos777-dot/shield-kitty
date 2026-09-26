@@ -333,7 +333,16 @@ def record_attempt(key, vid, pid, serial):
 
 
 def add_ban(vid, pid, serial, count):
+    """Persist a permanent ban. Returns True if it reached disk.
+
+    A ban that fails to write is the worst failure mode this tool has: the
+    device looks banned for this session, then walks straight back in after a
+    reboot. So the failure is logged at ALERT level and the caller is told,
+    rather than the write being swallowed.
+    """
     import time
+    row = "{},{},{},{},{}\n".format(
+        vid, pid, serial, time.strftime("%Y-%m-%d %H:%M:%S"), count)
     try:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         if not BLACKLIST.exists() or BLACKLIST.stat().st_size == 0:
@@ -341,10 +350,21 @@ def add_ban(vid, pid, serial, count):
                 f.write("# vid,pid,serial,when,attempts "
                         "(managed by shield-kitty-devices.py)\n")
         with open(BLACKLIST, "a") as f:
-            f.write("{},{},{},{},{}\n".format(
-                vid, pid, serial, time.strftime("%Y-%m-%d %H:%M:%S"), count))
+            f.write(row)
+            f.flush()
+            os.fsync(f.fileno())
+        # Verify the record parses back. A write that silently truncated or
+        # interleaved is worse than no write: it looks persisted but does not
+        # match, so is_banned() would disagree with what the operator sees.
+        if not any(v == vid and p == pid
+                   for (v, p, _w, _n) in parse_bans(BLACKLIST).values()):
+            raise OSError("record did not survive a read-back check")
+        return True
     except Exception as exc:
-        log(f"could not write {BLACKLIST}: {exc}")
+        log("ALERT BAN NOT PERSISTED for {}:{}: {} — this device will NOT be "
+            "blocked after a reboot; fix {} or the device is only quarantined "
+            "for this session".format(vid, pid, exc, BLACKLIST))
+        return False
 
 
 def is_banned(vid, pid, serial):
@@ -390,7 +410,14 @@ def handle_add():
     else:
         log("  sysfs node not found; nothing to unbind, alerting only")
     if n >= 2:
-        add_ban(vid, pid, serial, n)
+        persisted = add_ban(vid, pid, serial, n)
+        if not persisted:
+            # Do not claim BANNED. The device IS unbound right now, so it is
+            # quarantined for this session — but the permanent record failed,
+            # and the operator has to know that distinction.
+            log(f"  BAN RECORD FAILED — {ident} is quarantined this session "
+                f"only and will be treated as a first sighting on replug")
+            action = "QUARANTINED (BAN FAILED TO PERSIST)"
     notify(vid, pid, serial, n, action)
     return 0
 

@@ -152,6 +152,75 @@ check("root-hub VID:PID does not resolve to a bindable node",
       r is None or "usb" not in str(r).split("/")[-1][:3],
       f"got {r}")
 
+print("\n=== 6. a failed ban write must be loud, not silent ===")
+# The worst failure this tool has: the ban looks applied, then the device
+# walks back in after reboot. add_ban must report it and the caller must
+# not claim BANNED.
+
+bl3 = Path(td) / "unwritable.csv"
+mod.BLACKLIST = bl3
+# `open` is a builtin, not a module global. Seed it from builtins so the
+# module's own `open(...)` calls resolve to our shim, then restore it.
+import builtins
+orig_open = getattr(mod, "open", builtins.open)
+
+
+def boom_open(path, *a, **kw):
+    if str(path) == str(bl3):
+        raise PermissionError("simulated: blacklist is not writable")
+    return orig_open(path, *a, **kw)
+
+
+mod.open = boom_open
+msgs = []
+orig_log = mod.log
+mod.log = lambda m: (msgs.append(m), orig_log(m))[1]
+ok = mod.add_ban("1a86", "7523", "SN9", 2)
+mod.log = orig_log
+mod.open = orig_open
+
+check("add_ban returns False when the write fails", ok is False)
+check("failed ban logs at ALERT level",
+      any("ALERT" in m and "BAN NOT PERSISTED" in m for m in msgs),
+      f"logged: {msgs}")
+
+# And the caller's promise: it must not report BANNED when the write failed.
+bl4 = Path(td) / "caller.csv"
+mod.BLACKLIST = bl4
+
+
+def boom_open4(path, *a, **kw):
+    if str(path) == str(bl4):
+        raise PermissionError("simulated")
+    return orig_open(path, *a, **kw)
+
+
+mod.open = boom_open4
+msgs2 = []
+mod.log = msgs2.append
+saved_environ = dict(os.environ)
+os.environ.update({
+    "ID_VENDOR_ID": "1a86", "ID_MODEL_ID": "7523", "ID_SERIAL_SHORT": "SN9",
+    "ACTION": "add",
+})
+mod.quarantine = lambda dev: []
+mod.notify = lambda *a, **kw: msgs2.append("NOTIFY:" + str(a[4] if len(a) > 4 else ""))
+mod.is_input_device = lambda dev: False
+mod.sysfs_path = lambda *a: "/sys/fake"
+mod.parse_ids = lambda p: set()          # nothing whitelisted
+mod.record_attempt = lambda *a: 2        # second sighting -> would ban
+mod.handle_add()
+mod.log = orig_log
+mod.open = orig_open
+os.environ.clear()
+os.environ.update(saved_environ)
+
+check("caller does NOT report BANNED when the write failed",
+      not any("NOTIFY:BANNED" in m for m in msgs2),
+      f"got {msgs2}")
+check("caller says the ban failed",
+      any("BAN RECORD FAILED" in m for m in msgs2), f"got {msgs2}")
+
 print(f"\n{'='*56}\n{len(PASS)} passed, {len(FAIL)} failed")
 if FAIL:
     print("FAILED:")
