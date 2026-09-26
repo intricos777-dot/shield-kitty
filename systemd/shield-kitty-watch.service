@@ -1,0 +1,24 @@
+[Unit]
+Description=Shield Kitty intrusion watcher (journal tailer)
+Documentation=file://%h/Projects/shield-kitty/
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/Projects/shield-kitty/shield-kitty-watch.py
+Restart=on-failure
+RestartSec=10
+
+# Hardening: this only needs to read the journal and spawn the alert.
+# Lock down everything else.
+NoNewPrivileges=true
+PrivateTmp=true
+# The watcher must read its own script from ~/Projects and the alert must
+# reach the display socket, so ProtectSystem=strict / ProtectHome=read-only
+# caused exit 226/NAMESPACE. Keep the directives that do work.
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=default.target

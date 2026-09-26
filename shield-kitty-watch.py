@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-nyan-gfsf-alert — intrusion event detector.
+shield-kitty — intrusion event detector.
 
 Tails the systemd journal for signals that something outside the machine
-tried to get in, and fires a fullscreen pixel alert on the local display.
+tried to get in, and fires a fullscreen pixel nyan cat alert on the local
+display.
 
 This is a DETECTION and NOTIFICATION tool. It blocks nothing on its own.
 Blocking is the job of pam_faillock (already enabled) and the firewall
@@ -17,8 +18,8 @@ Design notes:
   - Never blocks. If the display cannot be opened, it logs and continues.
 
 Usage:
-  gfsf-watch            run in foreground (for testing)
-  gfsf-watch --selftest run detector once against the last 10 minutes
+  shield-kitty-watch            run in foreground (for testing)
+  shield-kitty-watch --selftest run detector once against the last 10 minutes
 """
 
 import argparse
@@ -32,9 +33,9 @@ import time
 from pathlib import Path
 
 XDG_RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"))
-STATE_DIR = XDG_RUNTIME / "nyan-gfsf-alert"
+STATE_DIR = XDG_RUNTIME / "shield-kitty"
 CURSOR = STATE_DIR / "cursor"
-ALERT_SCRIPT = Path(__file__).parent / "alert.py"
+ALERT_SCRIPT = Path(__file__).parent / "shield-kitty-alert.py"
 LOCK = STATE_DIR / "watch.lock"
 
 # Seconds to suppress further alerts after one fires. A password-spraying
@@ -105,7 +106,7 @@ RULES = [
 
 
 def log(msg: str) -> None:
-    print(f"[gfsf-watch] {msg}", flush=True)
+    print(f"[shield-kitty] {msg}", flush=True)
 
 
 def have_journal_access() -> bool:
@@ -279,7 +280,7 @@ def main() -> int:
 
     cursor = read_cursor() or latest_cursor()
     write_cursor(cursor)
-    log("watching journal from cursor", cursor[:16] or "(fresh start)")
+    log(f"watching journal from cursor {cursor[:16] or '(fresh start)'}")
 
     last_fire = 0.0
     while True:

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-alert.py — fullscreen pixel-art nyan cat intrusion alert.
+shield-kitty-alert.py — fullscreen pixel-art nyan cat intrusion alert.
 
-Usage:  ./alert.py '<json payload>'
-        ./alert.py --demo      # trigger with fake data, for testing
+Usage:  ./shield-kitty-alert.py '<json payload>'
+        ./shield-kitty-alert.py --demo   # trigger with fake data, for testing
 
 Drawn with PyQt6. Falls back to zenity/kdialog, then to a terminal banner,
 so an alert ALWAYS reaches you even if the GUI stack is unhappy.
@@ -127,15 +127,15 @@ def _build_widget_classes():
             for x, y, ww, hh, color in self.pixel_map(FLAME, fpal, ch, ox, foy):
                 p.fillRect(x, y, ww, hh, color)
 
-            # GFSF wordmark
+            # wordmark
             p.setPen(self.light)
-            p.setFont(QFont("DejaVu Sans Mono", max(28, cw), QFont.Bold))
+            p.setFont(QFont("DejaVu Sans Mono", max(28, cw), QFont.Weight.Bold))
             p.drawText(0, foy + len(FLAME) * ch + 70, w, 60,
-                       _Qt.AlignmentFlag.AlignHCenter, "GFSF")
+                       _Qt.AlignmentFlag.AlignHCenter, "SHIELD KITTY")
 
             # banner
             p.setPen(QColor("#ff2d2d") if self.crit else QColor("#ffb000"))
-            p.setFont(QFont("DejaVu Sans", 34, QFont.Bold))
+            p.setFont(QFont("DejaVu Sans", 34, QFont.Weight.Bold))
             p.drawText(0, 60, w, 50, _Qt.AlignmentFlag.AlignHCenter,
                        "INTRUSION DETECTED" if self.crit else "SECURITY EVENT")
 
@@ -217,7 +217,7 @@ def main() -> int:
     try:
         return gui(payload)
     except Exception as exc:
-        print(f"[alert] GUI unavailable ({exc}); falling back", file=sys.stderr)
+        print(f"[shield-kitty] GUI unavailable ({exc}); falling back", file=sys.stderr)
         return terminal(payload)
 
 
