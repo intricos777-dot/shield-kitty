@@ -105,20 +105,16 @@ RULES = [
         "LOGIN SCREEN AUTH FAILURE",
         "critical",
     ),
-    (
-        # Only real peripherals, never the machine's own root hubs.
-        # A genuine attach has a bus-PORT path ("usb 3-7:") and always logs
-        # a "New USB device found, idVendor=..." line. Root hubs log as
-        # "usb1:"/"usb2:" (bus only, no port) and are just the controller
-        # enumerating itself at every boot.
-        "usb_attach",
-        re.compile(
-            r"\busb\s+\d+-\d+(?:\.\d+)*:\s+new\s+(?:full|low|high)-speed\s+USB\s+device"
-        ),
-        "USB DEVICE ATTACHED",
-        "warning",
-    ),
 ]
+
+# Deliberately NOT alerting on:
+#   - USB / Thunderbolt attach. A device appearing is not an intrusion — it is
+#     the ordinary case of plugging in a phone or a keyboard, and root-hub
+#     attach lines fire on every boot. Physical-device policy is handled by
+#     blocking (see device-blacklist/ in this repo), not by notification.
+#   - The local admin's own sudo activity. See is_local_admin_actor().
+#   - Anything that is not an authentication or privilege boundary being
+#     crossed by someone else. If it is not someone trying in, it is noise.
 
 
 def log(msg: str) -> None:

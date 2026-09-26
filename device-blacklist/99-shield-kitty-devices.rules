@@ -1,0 +1,14 @@
+# Shield Kitty device admission control
+#
+# Runs on every USB device add. Unknown devices are quarantined on first
+# sighting and permanently banned on the second. See device-blacklist/README.md.
+#
+# Root hubs and HID are exempt inside the script (NEVER_BLOCK / ALLOWED_CLASSES).
+
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_VENDOR_ID}!="1d6b", \
+  RUN+="/usr/bin/python3 /opt/shield-kitty/shield-kitty-devices.py add"
+
+# Second line of defence: storage and network interfaces, in case a device is
+# re-enumerated without a fresh usb_device add event.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", \
+  RUN+="/usr/bin/python3 /opt/shield-kitty/shield-kitty-devices.py add"

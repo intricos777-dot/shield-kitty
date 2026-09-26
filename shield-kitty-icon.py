@@ -2,9 +2,9 @@
 """
 shield-kitty-icon.py — render the Shield Kitty nyan cat to a PNG.
 
-Pure stdlib (zlib + struct), so the notification icon works even if Qt is not
-importable. The pixel art is the same CAT/FLAME grid the fullscreen view uses,
-so the icon and the fullscreen kitty are the same cat.
+Pure stdlib (zlib + struct), so the notification icon works even when Qt is not
+importable. Same art module as the fullscreen view, so the notification icon and
+the fullscreen kitty are the same cat.
 
 Writes to $XDG_CACHE_HOME/shield-kitty/nyan-<variant>.png and prints the path.
 """
@@ -17,64 +17,58 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 try:
-    from shield_kitty_art import CAT, FLAME
-except ImportError:
-    # Fallback copy so this file works even if the art module is missing.
-    CAT = [
-        "..BBBBB...",
-        ".BBBBBBB..",
-        "BBBBBBBBBB",
-        "BBKBBBBKBB",
-        "BBBBBBBBBB",
-        "BBBBBBBBBB",
-        "BBKKKKKBBB",
-        "BBBBBBWBBB",
-        "BBBBBBBBBB",
-        "BBBBBBBBBB",
-        "BBKBBBBKBB",
-        ".BBBBBBB..",
-        "..BBBBB...",
-    ]
-    FLAME = [
-        "..Y.......",
-        ".YY.Y.Y...",
-        "..Y...Y...",
-        ".Y.Y.Y.Y..",
-        "..Y...Y...",
-        ".Y.Y.Y...",
-        ".OYO.YO...",
-        "..O...O...",
-    ]
+    from shield_kitty_art import CAT, TART, TRAIL, FLAME
+except ImportError:  # art module missing: render a plain red block, never crash
+    CAT = ["..BBBBBBBB..", ".BBBBBBBBBB.", "BBBBBBBBBBBB", "BBBBBBBBBBBB",
+           "BBBBBBBBBBBB", "BBBBBBBBBBBB", "BBBBBBBBBBBB", "BBBBBBBBBBBB",
+           ".BBBBBBBBBB.", "..BBBBBBBB.."]
+    TART = TRAIL = FLAME = []
 
-# Critical = the cat on a dark blood-red field. Warning = same cat, amber field.
+RAINBOW = {
+    "r": (255, 45, 45),
+    "o": (255, 140, 0),
+    "y": (255, 215, 0),
+    "g": (60, 220, 90),
+    "c": (60, 200, 230),
+    "b": (70, 110, 255),
+    "v": (170, 90, 240),
+    "p": (255, 120, 190),
+}
+
+# Critical = cat on blood red. Warning = same cat, amber field.
 VARIANTS = {
     "critical": {
         "bg": (18, 0, 0),
-        "palette": {"B": (255, 45, 45), "K": (26, 0, 0), "W": (255, 255, 255),
-                    "Y": (255, 208, 0), "O": (255, 60, 0)},
+        "body": (255, 45, 45),
+        "ink": (26, 0, 0),
+        "tart": (214, 140, 60),
+        "icing": (255, 220, 240),
     },
     "warning": {
         "bg": (26, 20, 0),
-        "palette": {"B": (255, 176, 0), "K": (26, 20, 0), "W": (255, 255, 255),
-                    "Y": (255, 208, 0), "O": (255, 60, 0)},
+        "body": (255, 176, 0),
+        "ink": (26, 18, 0),
+        "tart": (200, 140, 60),
+        "icing": (255, 245, 220),
     },
 }
 
-CELL = 12          # pixels per art cell
-MARGIN = 6         # padding around the art
-TRAIL = 3          # comet-trail cells drawn behind the cat
+CELL = 10          # pixels per art cell
+MARGIN = 5         # padding around the art
 
 
 def render(variant="critical", cell=CELL):
-    """Return raw RGB rows for the icon."""
+    """Return (width, height, rows) with rows a list of (r,g,b) tuples."""
     style = VARIANTS.get(variant, VARIANTS["critical"])
-    pal = style["palette"]
     bg = style["bg"]
 
-    rows = len(CAT) + len(FLAME)
-    cols = len(CAT[0]) + TRAIL
-    w = cols * cell + MARGIN * 2
-    h = rows * cell + MARGIN * 2
+    art_rows = [CAT, TART, FLAME] if TART else [CAT, FLAME]
+    n_rows = sum(len(g) for g in art_rows)
+    n_cols = max(len(r) for g in art_rows for r in g)
+    trail_w = len(TRAIL[0]) if TRAIL else 0
+
+    w = (n_cols + trail_w) * cell + MARGIN * 2
+    h = n_rows * cell + MARGIN * 2
 
     px = [[bg for _ in range(w)] for _ in range(h)]
 
@@ -84,20 +78,7 @@ def render(variant="critical", cell=CELL):
                 int(bg[i] + (color[i] - bg[i]) * alpha) for i in range(3)
             )
 
-    ox = MARGIN + TRAIL * cell
-    oy = MARGIN
-
-    # comet trail behind the cat, fading left
-    for i, t in enumerate((0.25, 0.15)):
-        for r in range(len(CAT)):
-            for c in range(TRAIL - i):
-                x = ox - (TRAIL - i - c) * cell
-                y = oy + r * cell
-                for dy in range(cell):
-                    for dx in range(cell):
-                        put(x + dx, y + dy, pal["O"], t)
-
-    def draw(grid, top, palette):
+    def draw(grid, top, left, palette):
         for r, line in enumerate(grid):
             for c, ch in enumerate(line):
                 if ch == ".":
@@ -107,10 +88,34 @@ def render(variant="critical", cell=CELL):
                     continue
                 for dy in range(cell):
                     for dx in range(cell):
-                        put(ox + c * cell + dx, top + r * cell + dy, color)
+                        put(left + c * cell + dx, top + r * cell + dy, color)
 
-    draw(CAT, oy, pal)
-    draw(FLAME, oy + len(CAT) * cell, pal)
+    pal = {
+        "B": style["body"],
+        "K": style["ink"],
+        "W": (255, 255, 255),
+        "T": style["icing"],
+        "F": style["tart"],
+        "Y": (255, 208, 0),
+        "O": (255, 90, 0),
+    }
+    pal.update(RAINBOW)
+
+    # Rainbow trail: the tart rows only, so the trail lines up with the body.
+    if TRAIL:
+        cat_h = len(CAT)
+        tart_h = len(TART) if TART else 0
+        top = MARGIN + cat_h * cell
+        # Rainbow stripes: TART maps 1:1 onto the trail rows.
+        for r, line in enumerate(TRAIL):
+            ty = top + (r * tart_h // len(TRAIL)) * cell
+            draw([line], ty, MARGIN, pal)
+
+    top = MARGIN
+    for grid in art_rows:
+        draw(grid, top, MARGIN + (len(TRAIL[0]) * cell if TRAIL else 0), pal)
+        top += len(grid) * cell
+
     return w, h, px
 
 
@@ -133,7 +138,7 @@ def write_png(path, w, h, rows):
 
 
 def icon_path(variant="critical"):
-    """Path to the icon, rendering it if missing or stale. None on failure."""
+    """Path to the icon, rendering it if missing. None on failure."""
     cache = Path(os.environ.get("XDG_CACHE_HOME",
                                 Path.home() / ".cache")) / "shield-kitty"
     try:

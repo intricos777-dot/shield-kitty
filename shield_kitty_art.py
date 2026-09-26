@@ -5,32 +5,67 @@ shield_kitty_art.py — the pixel art, in one place.
 Shared by the notification icon renderer and the opt-in fullscreen view, so the
 cat in your notification popup is the same cat as the fullscreen kitty.
 
-B = body, K = outline/eye, W = white, Y = flame yellow, O = flame orange, . = transparent
+Grid legend
+-----------
+  B  body (cat + pop-tart)
+  K  outline / eye / mouth
+  W  white (eye glint, icing highlight)
+  T  pop-tart crust / icing
+  r  rainbow red      o  rainbow orange    y  rainbow yellow
+  g  rainbow green    c  rainbow cyan      b  rainbow blue
+  v  rainbow violet   p  rainbow pink
+  Y  flame yellow     O  flame orange      .  transparent
+
+CAT is 16 wide, TRAIL is 16 wide and sits immediately to its left, so the
+composite is 32 cells. FLAME hangs below the cat.
 """
 
 CAT = [
-    "..BBBBB...",
-    ".BBBBBBB..",
-    "BBBBBBBBBB",
-    "BBKBBBBKBB",
-    "BBBBBBBBBB",
-    "BBBBBBBBBB",
-    "BBKKKKKBBB",
-    "BBBBBBWBBB",
-    "BBBBBBBBBB",
-    "BBBBBBBBBB",
-    "BBKBBBBKBB",
-    ".BBBBBBB..",
-    "..BBBBB...",
+    "....BBBBBBBB....",
+    "...BBBBBBBBBB...",
+    "..BBBBBBBBBBBB..",
+    "..BBKBBBBBBKBB..",
+    "..BBKBBBBBBKBB..",
+    "..BBBBBBBBBBBB..",
+    "..BBBBKBBKBBBB..",
+    "..BBBBBBBBBBBB..",
+    "..BBWBBBBBBWBB..",
+    "..BBBBBBBBBBBB..",
+    "..BBKBBBBBBKBB..",
+    "..BBBBBBBBBBBB..",
+    "...BBBBBBBBBB...",
+    "....BBBBBBBB....",
+]
+
+# Pop-tart body below the head: F = crust, T = icing, W = icing highlight.
+TART = [
+    ".FFFFFFFFFFFFFF.",
+    "FFTTTTTTTTTTTTFF",
+    "FTTWTTTTTTTTWTTF",
+    "FTTTTTTTTTTTTTTF",
+    "FFTTTTTTTTTTTTFF",
+    ".FFFFFFFFFFFFFF.",
+]
+
+# Rainbow trail, 16 wide, ordered from the cat outward.
+TRAIL = [
+    "rroyyggccbbvpppp",
+    "rroyyggccbbvpppp",
+    "rroyyggccbbvpppp",
+    "rroyyggccbbvpppp",
+    "rroyyggccbbvpppp",
 ]
 
 FLAME = [
-    "..Y.......",
-    ".YY.Y.Y...",
-    "..Y...Y...",
-    ".Y.Y.Y.Y..",
-    "..Y...Y...",
-    ".Y.Y.Y...",
-    ".OYO.YO...",
-    "..O...O...",
+    "....Y...Y.......",
+    "...YY.Y.YY..Y...",
+    "..Y..Y...Y.Y.Y..",
+    ".Y.Y.Y..Y...Y.Y.",
+    "..Y...Y.Y.Y..Y..",
+    "..OY.Y.....Y.O..",
+    ".O...Y...Y...O..",
+    "..O..Y.Y...O.O..",
 ]
+
+ART_W = 16
+TRAIL_W = 16
