@@ -126,6 +126,26 @@ check("mass storage (08) is NOT input", mod.is_input_device(FakeDev(["08"])) is 
 check("network (02) is NOT input", mod.is_input_device(FakeDev(["02"])) is False)
 check("no interfaces -> not input", mod.is_input_device(FakeDev([])) is False)
 
+
+class ExplodingDev:
+    """A device whose sysfs read fails — the lockout scenario."""
+
+    def glob(self, pat):
+        raise OSError("sysfs read failed")
+
+
+check("unreadable device FAILS SAFE (exempted, not blockable)",
+      mod.is_input_device(ExplodingDev()) is True,
+      "an unreadable keyboard must never be quarantined")
+
+print("\n=== 5b. NEVER_BLOCK is the second backstop ===")
+# Root hubs (1d6b:0002/0003) must be in the never-block set: unbinding a
+# root hub takes the whole bus down, not just one device.
+for vid, pid in (("1d6b", "0002"), ("1d6b", "0003")):
+    check(f"root hub {vid}:{pid} in NEVER_BLOCK", (vid, pid) in mod.NEVER_BLOCK,
+          f"NEVER_BLOCK={mod.NEVER_BLOCK}")
+check("NEVER_BLOCK is populated", len(mod.NEVER_BLOCK) > 0)
+
 print("\n=== 5. sysfs_path must not return a root hub ===")
 r = mod.sysfs_path("1d6b", "0002", "")
 check("root-hub VID:PID does not resolve to a bindable node",

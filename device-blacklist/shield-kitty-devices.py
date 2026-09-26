@@ -66,14 +66,27 @@ HID_CLASSES = {"03", "09"}  # keyboard, mouse / HID
 
 
 def is_input_device(dev):
-    """True if any interface of this device is HID (keyboard, mouse, gamepad)."""
+    """
+    True if any interface of this device is HID (keyboard, mouse, gamepad).
+
+    FAILS SAFE: if the class cannot be read we return True, exempting the
+    device. The original returned False on error, which meant a transient
+    sysfs read failure on a keyboard made it look like ordinary storage --
+    and the caller would then quarantine it. An unreadable device must never
+    be treated as safe to block: the cost of a false negative here is a
+    machine with no keyboard, while the cost of a false positive is merely
+    that one device is not auto-banned.
+
+    never_block() is the second backstop for exactly this case.
+    """
     try:
         for iface in dev.glob("*:*"):
             f = iface / "bInterfaceClass"
             if f.exists() and f.read_text().strip()[:2] in HID_CLASSES:
                 return True
-    except Exception:
-        pass
+    except Exception as exc:
+        log(f"is_input_device: unreadable, exempting out of caution: {exc}")
+        return True
     return False
 
 DRIVERS_TO_UNBIND = ("usb-storage", "uas", "hid", "hid-generic",
