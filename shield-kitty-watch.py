@@ -36,11 +36,20 @@ XDG_RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
 STATE_DIR = XDG_RUNTIME / "shield-kitty"
 CURSOR = STATE_DIR / "cursor"
 ALERT_SCRIPT = Path(__file__).parent / "shield-kitty-alert.py"
+# Tamper-evident evidence store. Optional: if this repo is not present the
+# watcher still fires alerts, it just does not build a court-defensible record.
+EVIDENCE = Path.home() / "Projects/shield-kitty-forensics/evidence.py"
 LOCK = STATE_DIR / "watch.lock"
 
-# Seconds to suppress further alerts after one fires. A password-spraying
-# run produces dozens of failures in seconds; one alert communicates that.
-DEBOUNCE = 45
+# Seconds to suppress further alerts after one fires.
+#
+# This used to be 45s, which meant a password-spraying run of 50 attempts in a
+# minute produced exactly one notification — the exact case where you want to
+# know it is still happening. Now short enough that a sustained attack keeps
+# notifying, long enough that a single burst does not become a wall of popups.
+# Escalates: repeated critical alerts inside the window shorten it further.
+DEBOUNCE = 10
+DEBOUNCE_MIN = 3
 
 # --- Detection rules -------------------------------------------------------
 # Each rule: (name, compiled regex, human label, severity)
@@ -97,8 +106,15 @@ RULES = [
         "critical",
     ),
     (
+        # Only real peripherals, never the machine's own root hubs.
+        # A genuine attach has a bus-PORT path ("usb 3-7:") and always logs
+        # a "New USB device found, idVendor=..." line. Root hubs log as
+        # "usb1:"/"usb2:" (bus only, no port) and are just the controller
+        # enumerating itself at every boot.
         "usb_attach",
-        re.compile(r"usb .*(?:new high-speed USB device|Product:)", re.I),
+        re.compile(
+            r"\busb\s+\d+-\d+(?:\.\d+)*:\s+new\s+(?:full|low|high)-speed\s+USB\s+device"
+        ),
         "USB DEVICE ATTACHED",
         "warning",
     ),
@@ -215,6 +231,20 @@ def fire_alert(events: list[dict]) -> None:
     for e in events:
         log(f"        {e['label']} x{e['count']}")
 
+    # Append to the tamper-evident evidence chain BEFORE displaying. If the
+    # log write fails we still alert: losing evidence is bad, but staying
+    # silent about an intrusion is worse.
+    if EVIDENCE.exists():
+        try:
+            subprocess.run(
+                [sys.executable, str(EVIDENCE), "record", "--event", json.dumps(payload)],
+                capture_output=True, timeout=20,
+            )
+        except Exception as exc:
+            log(f"evidence logging failed: {exc}")
+    else:
+        log(f"evidence store missing at {EVIDENCE}; alert only, no proof")
+
     # Detach the display so a slow/fullscreen window never stalls detection.
     try:
         subprocess.Popen(
@@ -283,15 +313,21 @@ def main() -> int:
     log(f"watching journal from cursor {cursor[:16] or '(fresh start)'}")
 
     last_fire = 0.0
+    cooldown = DEBOUNCE
     while True:
         lines = fetch_since(cursor)
         if lines:
             cursor = latest_cursor() or cursor
             write_cursor(cursor)
             events = classify(lines)
-            if events and (time.time() - last_fire) > DEBOUNCE:
-                fire_alert(events)
-                last_fire = time.time()
+            if events:
+                crit = most_severe(events) == "critical"
+                if (time.time() - last_fire) > cooldown:
+                    fire_alert(events)
+                    last_fire = time.time()
+                    # Sustained attack: keep talking, but back off a little so
+                    # a spray does not turn into hundreds of popups.
+                    cooldown = DEBOUNCE_MIN if crit else DEBOUNCE
         time.sleep(3)
 
 
