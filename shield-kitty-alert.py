@@ -269,9 +269,88 @@ def terminal(payload):
     return 0
 
 
+def terminal_kitty(payload):
+    """The same alert, but wearing the nyan cat.
+
+    Item 2 of three. Reuses shield_kitty_art grids -- no art is drawn here --
+    so what you see is the same cat the PNG icon shows.
+    """
+    try:
+        from shield_kitty_art import CAT, TART, TRAIL, FLAME
+    except ImportError:
+        return terminal(payload)          # art module gone: plain alert
+
+    palette = {
+        "B": (255, 45, 45), "K": (26, 0, 0), "W": (255, 255, 255),
+        "F": (190, 120, 60), "T": (255, 200, 220),
+        "Y": (255, 215, 0), "O": (255, 110, 0),
+    }
+    rgb = {"r": (255, 45, 45), "o": (255, 140, 0), "y": (255, 215, 0),
+           "g": (60, 220, 90), "c": (60, 200, 230), "b": (70, 110, 255),
+           "v": (170, 90, 240), "p": (255, 120, 190)}
+    ember = {"Y": "▒", "O": "░"}
+
+    def paint(grid):
+        out = []
+        for line in grid:
+            for ch in line:
+                if ch in ". ":
+                    out.append(" ")
+                elif ch in ember:
+                    r, g, b = palette[ch]
+                    out.append("\x1b[38;2;{};{};{}m{}{}".format(r, g, b, ember[ch], "\x1b[0m"))
+                elif ch in rgb:
+                    r, g, b = rgb[ch]
+                    out.append("\x1b[38;2;{};{};{}m█\x1b[0m".format(r, g, b))
+                else:
+                    r, g, b = palette[ch]
+                    out.append("\x1b[38;2;{};{};{}m█\x1b[0m".format(r, g, b))
+            out.append("\n")
+        return "".join(out)
+
+    sev = payload.get("severity", "warning")
+    print()
+    trail = (TRAIL * ((len(CAT) // len(TRAIL)) + 1))[:len(CAT)]
+    for t, c in zip(trail, CAT):
+        sys.stdout.write("  " + paint([t + c]).rstrip("\n") + "\n")
+    sys.stdout.write("  " + paint(TART).rstrip("\n") + "\n")
+    sys.stdout.write("  " + paint(FLAME).rstrip("\n") + "\n")
+    print()
+
+    # GFSF lettering under the cat, matching the terminal renderer's slanted
+    # bold-cursive glyphs.
+    glyphs = {
+        "G": [" ██████╗ ", "██╔════╝ ", "█████╗   ", "██╔══╝   ", "╚██████╗ ", " ╚═════╝ "],
+        "F": ["███████╗ ", "██╔════╝ ", "█████╗   ", "██╔══╝   ", "██║      ", "██║      "],
+        "S": ["███████╗ ", "██╔════╝ ", "███████╗ ", "╚════██║ ", "███████║ ", "╚══════╝ "],
+    }
+    rows = [""] * 6
+    for ch in "GFSF":
+        for i, line in enumerate(glyphs[ch]):
+            rows[i] += line
+    ramp = [(255, 45, 45), (255, 215, 0), (60, 220, 90), (60, 200, 230),
+            (70, 110, 255), (255, 120, 190)]
+    print()
+    for i, row in enumerate(rows):
+        seg = []
+        for c, ch in enumerate(row):
+            if ch == " ":
+                seg.append(" ")
+                continue
+            r, g, b = ramp[(c // 3) % len(ramp)]
+            seg.append("\x1b[1;38;2;{};{};{}m{}\x1b[0m".format(r, g, b, ch))
+        print("  " + " " * ((len(rows) - 1 - i)) + "".join(seg))
+    print()
+
+    return terminal(payload)
+
+
 def main():
     want_fullscreen = "--fullscreen" in sys.argv
-    args = [a for a in sys.argv[1:] if a != "--fullscreen"]
+    want_kitty = "--kitty" in sys.argv
+    want_terminal = "--terminal" in sys.argv or want_kitty
+    args = [a for a in sys.argv[1:]
+            if a not in ("--fullscreen", "--kitty", "--terminal")]
 
     if "--test-notify" in args:
         return test_notify()
@@ -285,6 +364,13 @@ def main():
             payload = DEMO
     else:
         payload = DEMO
+
+    # --kitty prints the alert with the nyan cat above it; --terminal is the
+    # plain text version. Both bypass the notification popup.
+    if want_kitty:
+        return terminal_kitty(payload)
+    if want_terminal:
+        return terminal(payload)
 
     if want_fullscreen:
         try:
