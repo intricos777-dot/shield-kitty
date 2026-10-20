@@ -1,3 +1,4 @@
+<!-- Watermark: Living_Sin (intricos777-dot) + AI agents (Hermes, Lia, opencode) - collaborative work -->
 # Shield Kitty — device admission control
 
 Unknown USB devices get one chance. The first time one is plugged in it is
